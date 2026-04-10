@@ -1,0 +1,455 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>图片纹理统一工具</title>
+  <style>
+    :root {
+      color-scheme: dark;
+      --bg: #0d1117;
+      --panel: #161b22;
+      --panel-2: #1f2630;
+      --text: #e6edf3;
+      --muted: #9aa4b2;
+      --accent: #4cc9f0;
+      --accent-2: #80ed99;
+      --border: #30363d;
+    }
+
+    * {
+      box-sizing: border-box;
+    }
+
+    body {
+      margin: 0;
+      font-family: "PingFang SC", "SF Pro Display", "Helvetica Neue", sans-serif;
+      background:
+        radial-gradient(circle at 15% 10%, rgba(76, 201, 240, 0.22), transparent 35%),
+        radial-gradient(circle at 85% 85%, rgba(128, 237, 153, 0.2), transparent 30%),
+        var(--bg);
+      color: var(--text);
+      min-height: 100vh;
+    }
+
+    .container {
+      max-width: 1400px;
+      margin: 0 auto;
+      padding: 24px;
+      display: grid;
+      gap: 20px;
+    }
+
+    .toolbar {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+      gap: 12px;
+      background: linear-gradient(145deg, rgba(255, 255, 255, 0.04), rgba(255, 255, 255, 0.01));
+      border: 1px solid var(--border);
+      border-radius: 14px;
+      padding: 16px;
+      backdrop-filter: blur(6px);
+    }
+
+    .control {
+      display: grid;
+      gap: 8px;
+      align-content: start;
+    }
+
+    .control > label {
+      font-size: 13px;
+      color: var(--muted);
+    }
+
+    input[type="file"],
+    input[type="number"],
+    input[type="range"],
+    button {
+      width: 100%;
+    }
+
+    input[type="file"] {
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      background: var(--panel-2);
+      color: var(--text);
+      padding: 8px;
+    }
+
+    .inline {
+      display: flex;
+      gap: 10px;
+      align-items: center;
+    }
+
+    input[type="number"] {
+      max-width: 88px;
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      background: var(--panel-2);
+      color: var(--text);
+      padding: 8px;
+      font-size: 14px;
+    }
+
+    input[type="range"] {
+      accent-color: var(--accent);
+    }
+
+    button {
+      border: 0;
+      border-radius: 10px;
+      padding: 12px 14px;
+      font-weight: 600;
+      font-size: 14px;
+      color: #06121a;
+      background: linear-gradient(130deg, var(--accent), var(--accent-2));
+      cursor: pointer;
+      transition: transform 0.2s ease, box-shadow 0.2s ease;
+    }
+
+    button:hover {
+      transform: translateY(-1px);
+      box-shadow: 0 10px 24px rgba(76, 201, 240, 0.25);
+    }
+
+    button:disabled {
+      cursor: not-allowed;
+      opacity: 0.45;
+      transform: none;
+      box-shadow: none;
+    }
+
+    .status {
+      font-size: 13px;
+      color: var(--muted);
+      display: flex;
+      align-items: center;
+    }
+
+    .viewer-wrap {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 16px;
+    }
+
+    .panel {
+      border: 1px solid var(--border);
+      border-radius: 14px;
+      background: var(--panel);
+      min-height: 400px;
+      overflow: auto;
+      padding: 12px;
+      display: grid;
+      grid-template-rows: auto 1fr;
+      gap: 10px;
+    }
+
+    .panel h2 {
+      margin: 0;
+      font-size: 14px;
+      color: var(--muted);
+      letter-spacing: 0.06em;
+      font-weight: 700;
+    }
+
+    .canvas-area {
+      display: grid;
+      place-content: start;
+      min-height: 320px;
+    }
+
+    canvas {
+      display: block;
+      image-rendering: auto;
+      border-radius: 8px;
+      border: 1px solid rgba(255, 255, 255, 0.08);
+      background: repeating-conic-gradient(#111 0% 25%, #1a1a1a 0% 50%) 50% / 20px 20px;
+    }
+
+    @media (max-width: 980px) {
+      .viewer-wrap {
+        grid-template-columns: 1fr;
+      }
+    }
+  </style>
+</head>
+<body>
+  <main class="container">
+    <section class="toolbar">
+      <div class="control">
+        <label for="fileInput">上传图片</label>
+        <input id="fileInput" type="file" accept="image/*">
+      </div>
+      <div class="control">
+        <label for="clusterRange">聚类数 (1-200)</label>
+        <div class="inline">
+          <input id="clusterRange" type="range" min="1" max="200" step="1" value="20">
+          <input id="clusterNumber" type="number" min="1" max="200" step="1" value="20">
+        </div>
+      </div>
+      <div class="control">
+        <label for="noiseToggle">噪点</label>
+        <div class="inline">
+          <input id="noiseToggle" type="checkbox">
+          <span style="font-size: 13px; color: var(--muted);">开启后在聚类结果上添加噪点</span>
+        </div>
+      </div>
+      <div class="control">
+        <label for="noiseRange">噪点强度 (0-50)</label>
+        <div class="inline">
+          <input id="noiseRange" type="range" min="0" max="50" step="1" value="10">
+          <input id="noiseNumber" type="number" min="0" max="50" step="1" value="10">
+        </div>
+      </div>
+      <div class="control">
+        <label>执行</label>
+        <button id="processButton" disabled>开始处理</button>
+      </div>
+      <div class="status" id="statusText">请先上传图片</div>
+    </section>
+
+    <section class="viewer-wrap">
+      <article class="panel">
+        <h2>原始图片</h2>
+        <div class="canvas-area">
+          <canvas id="originalCanvas"></canvas>
+        </div>
+      </article>
+      <article class="panel">
+        <h2>处理后图片</h2>
+        <div class="canvas-area">
+          <canvas id="resultCanvas"></canvas>
+        </div>
+      </article>
+    </section>
+  </main>
+
+  <script>
+    const fileInput = document.getElementById("fileInput");
+    const clusterRange = document.getElementById("clusterRange");
+    const clusterNumber = document.getElementById("clusterNumber");
+    const noiseToggle = document.getElementById("noiseToggle");
+    const noiseRange = document.getElementById("noiseRange");
+    const noiseNumber = document.getElementById("noiseNumber");
+    const processButton = document.getElementById("processButton");
+    const statusText = document.getElementById("statusText");
+    const originalCanvas = document.getElementById("originalCanvas");
+    const resultCanvas = document.getElementById("resultCanvas");
+    const originalCtx = originalCanvas.getContext("2d", { willReadFrequently: true });
+    const resultCtx = resultCanvas.getContext("2d", { willReadFrequently: true });
+
+    let originalImageData = null;
+
+    function clamp(value, min, max) {
+      return Math.min(max, Math.max(min, value));
+    }
+
+    function syncRangeAndNumber(rangeEl, numberEl, min, max) {
+      const sync = (value) => {
+        const fixed = clamp(Number(value) || min, min, max);
+        rangeEl.value = String(fixed);
+        numberEl.value = String(fixed);
+      };
+
+      rangeEl.addEventListener("input", () => sync(rangeEl.value));
+      numberEl.addEventListener("input", () => sync(numberEl.value));
+      sync(rangeEl.value);
+    }
+
+    syncRangeAndNumber(clusterRange, clusterNumber, 1, 200);
+    syncRangeAndNumber(noiseRange, noiseNumber, 0, 50);
+
+    function setStatus(text) {
+      statusText.textContent = text;
+    }
+
+    function resizeCanvases(width, height) {
+      originalCanvas.width = width;
+      originalCanvas.height = height;
+      resultCanvas.width = width;
+      resultCanvas.height = height;
+      originalCanvas.style.width = `${width}px`;
+      originalCanvas.style.height = `${height}px`;
+      resultCanvas.style.width = `${width}px`;
+      resultCanvas.style.height = `${height}px`;
+    }
+
+    function loadImageToCanvas(file) {
+      return new Promise((resolve, reject) => {
+        const url = URL.createObjectURL(file);
+        const img = new Image();
+        img.onload = () => {
+          resizeCanvases(img.naturalWidth, img.naturalHeight);
+          originalCtx.clearRect(0, 0, img.naturalWidth, img.naturalHeight);
+          resultCtx.clearRect(0, 0, img.naturalWidth, img.naturalHeight);
+          originalCtx.drawImage(img, 0, 0);
+          resultCtx.drawImage(img, 0, 0);
+          originalImageData = originalCtx.getImageData(0, 0, img.naturalWidth, img.naturalHeight);
+          URL.revokeObjectURL(url);
+          resolve();
+        };
+        img.onerror = () => {
+          URL.revokeObjectURL(url);
+          reject(new Error("图片加载失败"));
+        };
+        img.src = url;
+      });
+    }
+
+    function initializeCenters(data, k) {
+      const total = data.length / 4;
+      const centers = [];
+      const used = new Set();
+      while (centers.length < k) {
+        const pixelIndex = Math.floor(Math.random() * total);
+        if (used.has(pixelIndex)) {
+          continue;
+        }
+        used.add(pixelIndex);
+        const i = pixelIndex * 4;
+        centers.push([data[i], data[i + 1], data[i + 2]]);
+      }
+      return centers;
+    }
+
+    function assignPixels(data, centers, assignments) {
+      const k = centers.length;
+      for (let px = 0; px < assignments.length; px += 1) {
+        const i = px * 4;
+        const r = data[i];
+        const g = data[i + 1];
+        const b = data[i + 2];
+        let bestCluster = 0;
+        let bestDist = Number.POSITIVE_INFINITY;
+        for (let c = 0; c < k; c += 1) {
+          const dr = r - centers[c][0];
+          const dg = g - centers[c][1];
+          const db = b - centers[c][2];
+          const dist = dr * dr + dg * dg + db * db;
+          if (dist < bestDist) {
+            bestDist = dist;
+            bestCluster = c;
+          }
+        }
+        assignments[px] = bestCluster;
+      }
+    }
+
+    function updateCenters(data, centers, assignments) {
+      const k = centers.length;
+      const sums = Array.from({ length: k }, () => [0, 0, 0, 0]);
+      for (let px = 0; px < assignments.length; px += 1) {
+        const i = px * 4;
+        const cluster = assignments[px];
+        sums[cluster][0] += data[i];
+        sums[cluster][1] += data[i + 1];
+        sums[cluster][2] += data[i + 2];
+        sums[cluster][3] += 1;
+      }
+
+      let moved = 0;
+      for (let c = 0; c < k; c += 1) {
+        if (sums[c][3] === 0) {
+          continue;
+        }
+        const next = [
+          sums[c][0] / sums[c][3],
+          sums[c][1] / sums[c][3],
+          sums[c][2] / sums[c][3]
+        ];
+        const diff =
+          Math.abs(centers[c][0] - next[0]) +
+          Math.abs(centers[c][1] - next[1]) +
+          Math.abs(centers[c][2] - next[2]);
+        moved += diff;
+        centers[c] = next;
+      }
+      return moved;
+    }
+
+    function runKMeans(data, k, maxIterations = 15) {
+      const pixelCount = data.length / 4;
+      const safeK = clamp(k, 1, pixelCount);
+      const centers = initializeCenters(data, safeK);
+      const assignments = new Uint16Array(data.length / 4);
+      for (let i = 0; i < maxIterations; i += 1) {
+        assignPixels(data, centers, assignments);
+        const moved = updateCenters(data, centers, assignments);
+        if (moved < 0.5) {
+          break;
+        }
+      }
+      return { centers, assignments, safeK };
+    }
+
+    function addNoise(value, amount) {
+      const delta = Math.floor(Math.random() * (amount * 2 + 1)) - amount;
+      return clamp(value + delta, 0, 255);
+    }
+
+    function generateResult() {
+      if (!originalImageData) {
+        return;
+      }
+
+      processButton.disabled = true;
+      const k = Number(clusterNumber.value);
+      const noiseEnabled = noiseToggle.checked;
+      const noiseAmount = Number(noiseNumber.value);
+      const source = originalImageData.data;
+      const result = new ImageData(originalImageData.width, originalImageData.height);
+      const target = result.data;
+
+      setStatus("正在聚类计算中...");
+      requestAnimationFrame(() => {
+        const { centers, assignments, safeK } = runKMeans(source, k);
+        for (let px = 0; px < assignments.length; px += 1) {
+          const i = px * 4;
+          const center = centers[assignments[px]];
+          let r = Math.round(center[0]);
+          let g = Math.round(center[1]);
+          let b = Math.round(center[2]);
+          if (noiseEnabled && noiseAmount > 0) {
+            r = addNoise(r, noiseAmount);
+            g = addNoise(g, noiseAmount);
+            b = addNoise(b, noiseAmount);
+          }
+          target[i] = r;
+          target[i + 1] = g;
+          target[i + 2] = b;
+          target[i + 3] = source[i + 3];
+        }
+        resultCtx.putImageData(result, 0, 0);
+        processButton.disabled = false;
+        setStatus(`处理完成：聚类 ${safeK} 类${noiseEnabled ? `，噪点 ±${noiseAmount}` : ""}`);
+      });
+    }
+
+    fileInput.addEventListener("change", async () => {
+      const [file] = fileInput.files || [];
+      if (!file) {
+        return;
+      }
+      setStatus("正在加载图片...");
+      processButton.disabled = true;
+      await loadImageToCanvas(file);
+      processButton.disabled = false;
+      setStatus("图片已加载，点击“开始处理”");
+    });
+
+    processButton.addEventListener("click", () => {
+      generateResult();
+    });
+
+    noiseToggle.addEventListener("change", () => {
+      noiseRange.disabled = !noiseToggle.checked;
+      noiseNumber.disabled = !noiseToggle.checked;
+    });
+
+    noiseRange.disabled = true;
+    noiseNumber.disabled = true;
+  </script>
+</body>
+</html>
