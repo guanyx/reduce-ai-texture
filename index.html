@@ -15,6 +15,7 @@
       --accent: #4cc9f0;
       --accent-2: #80ed99;
       --border: #30363d;
+      --preview-width: 560px;
     }
 
     * {
@@ -144,6 +145,7 @@
       display: grid;
       grid-template-rows: auto 1fr;
       gap: 10px;
+      position: relative;
     }
 
     .panel h2 {
@@ -156,8 +158,10 @@
 
     .canvas-area {
       display: grid;
-      place-content: start;
+      place-content: center;
       min-height: 320px;
+      width: 100%;
+      gap: 10px;
     }
 
     canvas {
@@ -166,6 +170,84 @@
       border-radius: 8px;
       border: 1px solid rgba(255, 255, 255, 0.08);
       background: repeating-conic-gradient(#111 0% 25%, #1a1a1a 0% 50%) 50% / 20px 20px;
+      width: min(100%, var(--preview-width));
+      height: auto;
+      cursor: zoom-in;
+    }
+
+    .hidden {
+      display: none;
+    }
+
+    .hint {
+      color: var(--muted);
+      font-size: 13px;
+    }
+
+    .result-panel.processing::after {
+      content: "处理中...";
+      position: absolute;
+      inset: 0;
+      display: grid;
+      place-items: center;
+      background: rgba(9, 13, 18, 0.62);
+      font-size: 18px;
+      font-weight: 700;
+      letter-spacing: 0.08em;
+      color: #f8fbff;
+      backdrop-filter: blur(1px);
+      z-index: 5;
+      pointer-events: none;
+    }
+
+    .modal {
+      position: fixed;
+      inset: 0;
+      background: rgba(0, 0, 0, 0.78);
+      display: grid;
+      place-items: center;
+      padding: 24px;
+      z-index: 50;
+    }
+
+    .modal-content {
+      background: #10151d;
+      border: 1px solid var(--border);
+      border-radius: 14px;
+      width: min(92vw, 1400px);
+      height: min(92vh, 900px);
+      padding: 14px;
+      display: grid;
+      grid-template-rows: auto 1fr;
+      gap: 12px;
+    }
+
+    .modal-head {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      color: var(--muted);
+      font-size: 13px;
+    }
+
+    .modal-head button {
+      width: auto;
+      padding: 8px 12px;
+      font-size: 12px;
+    }
+
+    .modal-stage {
+      display: grid;
+      place-items: center;
+      overflow: auto;
+      border-radius: 10px;
+      border: 1px solid rgba(255, 255, 255, 0.08);
+      background: #070b10;
+    }
+
+    .modal-stage img {
+      max-width: none;
+      height: auto;
     }
 
     @media (max-width: 980px) {
@@ -214,17 +296,31 @@
       <article class="panel">
         <h2>原始图片</h2>
         <div class="canvas-area">
-          <canvas id="originalCanvas"></canvas>
+          <canvas id="originalCanvas" class="hidden"></canvas>
+          <div class="hint" id="originalHint">请上传图片</div>
         </div>
       </article>
-      <article class="panel">
+      <article class="panel result-panel" id="resultPanel">
         <h2>处理后图片</h2>
         <div class="canvas-area">
-          <canvas id="resultCanvas"></canvas>
+          <canvas id="resultCanvas" class="hidden"></canvas>
+          <div class="hint" id="resultHint">等待处理结果</div>
         </div>
       </article>
     </section>
   </main>
+
+  <section class="modal hidden" id="imageModal">
+    <div class="modal-content">
+      <div class="modal-head">
+        <span id="modalTitle"></span>
+        <button id="closeModalButton" type="button">关闭</button>
+      </div>
+      <div class="modal-stage">
+        <img id="modalImage" alt="预览大图">
+      </div>
+    </div>
+  </section>
 
   <script>
     const fileInput = document.getElementById("fileInput");
@@ -237,6 +333,13 @@
     const statusText = document.getElementById("statusText");
     const originalCanvas = document.getElementById("originalCanvas");
     const resultCanvas = document.getElementById("resultCanvas");
+    const originalHint = document.getElementById("originalHint");
+    const resultHint = document.getElementById("resultHint");
+    const resultPanel = document.getElementById("resultPanel");
+    const imageModal = document.getElementById("imageModal");
+    const modalImage = document.getElementById("modalImage");
+    const modalTitle = document.getElementById("modalTitle");
+    const closeModalButton = document.getElementById("closeModalButton");
     const originalCtx = originalCanvas.getContext("2d", { willReadFrequently: true });
     const resultCtx = resultCanvas.getContext("2d", { willReadFrequently: true });
 
@@ -270,10 +373,42 @@
       originalCanvas.height = height;
       resultCanvas.width = width;
       resultCanvas.height = height;
-      originalCanvas.style.width = `${width}px`;
-      originalCanvas.style.height = `${height}px`;
-      resultCanvas.style.width = `${width}px`;
-      resultCanvas.style.height = `${height}px`;
+    }
+
+    function setProcessing(isProcessing) {
+      resultPanel.classList.toggle("processing", isProcessing);
+      processButton.disabled = isProcessing;
+      processButton.textContent = isProcessing ? "处理中..." : "开始处理";
+    }
+
+    function showOriginalPreview() {
+      originalCanvas.classList.remove("hidden");
+      originalHint.classList.add("hidden");
+    }
+
+    function clearResultPreview() {
+      resultCtx.clearRect(0, 0, resultCanvas.width, resultCanvas.height);
+      resultCanvas.classList.add("hidden");
+      resultHint.classList.remove("hidden");
+    }
+
+    function showResultPreview() {
+      resultCanvas.classList.remove("hidden");
+      resultHint.classList.add("hidden");
+    }
+
+    function openModalFromCanvas(canvas, title) {
+      if (canvas.classList.contains("hidden")) {
+        return;
+      }
+      modalImage.src = canvas.toDataURL("image/png");
+      modalTitle.textContent = title;
+      imageModal.classList.remove("hidden");
+    }
+
+    function closeModal() {
+      imageModal.classList.add("hidden");
+      modalImage.src = "";
     }
 
     function loadImageToCanvas(file) {
@@ -283,10 +418,10 @@
         img.onload = () => {
           resizeCanvases(img.naturalWidth, img.naturalHeight);
           originalCtx.clearRect(0, 0, img.naturalWidth, img.naturalHeight);
-          resultCtx.clearRect(0, 0, img.naturalWidth, img.naturalHeight);
           originalCtx.drawImage(img, 0, 0);
-          resultCtx.drawImage(img, 0, 0);
           originalImageData = originalCtx.getImageData(0, 0, img.naturalWidth, img.naturalHeight);
+          showOriginalPreview();
+          clearResultPreview();
           URL.revokeObjectURL(url);
           resolve();
         };
@@ -394,7 +529,7 @@
         return;
       }
 
-      processButton.disabled = true;
+      setProcessing(true);
       const k = Number(clusterNumber.value);
       const noiseEnabled = noiseToggle.checked;
       const noiseAmount = Number(noiseNumber.value);
@@ -422,7 +557,8 @@
           target[i + 3] = source[i + 3];
         }
         resultCtx.putImageData(result, 0, 0);
-        processButton.disabled = false;
+        showResultPreview();
+        setProcessing(false);
         setStatus(`处理完成：聚类 ${safeK} 类${noiseEnabled ? `，噪点 ±${noiseAmount}` : ""}`);
       });
     }
@@ -433,9 +569,9 @@
         return;
       }
       setStatus("正在加载图片...");
-      processButton.disabled = true;
+      setProcessing(true);
       await loadImageToCanvas(file);
-      processButton.disabled = false;
+      setProcessing(false);
       setStatus("图片已加载，点击“开始处理”");
     });
 
@@ -448,8 +584,18 @@
       noiseNumber.disabled = !noiseToggle.checked;
     });
 
+    originalCanvas.addEventListener("click", () => openModalFromCanvas(originalCanvas, "原始图片大图"));
+    resultCanvas.addEventListener("click", () => openModalFromCanvas(resultCanvas, "处理后图片大图"));
+    closeModalButton.addEventListener("click", closeModal);
+    imageModal.addEventListener("click", (event) => {
+      if (event.target === imageModal) {
+        closeModal();
+      }
+    });
+
     noiseRange.disabled = true;
     noiseNumber.disabled = true;
+    setProcessing(false);
   </script>
 </body>
 </html>
